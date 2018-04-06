@@ -161,6 +161,7 @@ void cose_kdf_context(const char* algorithm_id, int key_length, bytes other, uin
 }
 
 void derive_key(bytes input_key, bytes info, uint8_t* out, size_t out_size) {
+    // TODO
     // wc_HKDF(SHA256, input_key.buf, (word32) input_key.len, NULL, 0, info.buf, (word32) info.len, out, (word32) out_size);
 }
 
