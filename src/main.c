@@ -1,8 +1,10 @@
 #include <stdio.h>
 
 #include "mgos.h"
+#include "cryptoauthlib.h"
 
 static const char *s_listening_address = "tcp://:8080";
+uint8_t ID[64];
 
 static void http_handler(struct mg_connection *nc, int ev, void *p, void *user_data)
 {
@@ -62,6 +64,16 @@ enum mgos_app_init_result mgos_app_init(void)
     mg_register_http_endpoint(nc, "/authz-info", authz_info_handler, 0);
     mg_register_http_endpoint(nc, "/.well-known/edhoc", edhoc_handler, 0);
     mg_register_http_endpoint(nc, "/temperature", temperature_handler, 0);
+
+    // Generate ID
+    atcab_genkey(0, ID);
+    printf("RS public ID is: {X:");
+    for (int i = 0; i < 32; i++)
+        printf("%02x", ID[i]);
+    printf(", Y:");
+    for (int i = 0; i < 32; i++)
+        printf("%02x", ID[32 + i]);
+    printf("}\n");
 
     return MGOS_APP_INIT_SUCCESS;
 }
