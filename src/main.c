@@ -4,6 +4,7 @@
 #include "cryptoauthlib.h"
 #include "utils.h"
 #include "cwt.h"
+#include "edhoc.h"
 #include "cbor.h"
 
 #define AUDIENCE "tempSensor0"
@@ -141,12 +142,78 @@ static void edhoc_handler(struct mg_connection* nc, int ev, void* ev_data, void 
 }
 
 static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_data) {
-    // Send response
-    char response[64];
-    int len = sprintf(response, "{\"edhoc\": %d}", 1);
-    
-    mg_send_head(nc, 200, len, "Content-Type: application/json");
-    mg_send(nc, response, len);
+    struct http_message *hm = (struct http_message *) ev_data;
+
+    // Read msg1
+    edhoc_msg_1 msg1;
+    edhoc_deserialize_msg1(&msg1, (void*)hm->body.p, hm->body.len);
+
+    // Save message1 for later
+    edhoc_state.message1.buf = malloc(hm->body.len);
+    edhoc_state.message1.len = hm->body.len;
+    memcpy(edhoc_state.message1.buf, hm->body.p, hm->body.len);
+
+    // Generate random session id
+    uint8_t session_id[32];
+    atcab_random(session_id);
+    edhoc_state.session_id = (bytes){ session_id, 2 };
+
+    // Generate nonce
+    uint8_t nonce[32];
+    atcab_random(nonce);
+
+    // Generate session key
+    uint8_t session_key[64];
+    atcab_genkey(1, session_key);
+
+    // Compute shared secret
+    cose_key cose_eph_key;
+    cwt_parse_cose_key(&msg1.eph_key, &cose_eph_key);
+
+    uint8_t eph_key[64];
+    cwt_import_key(eph_key, &cose_eph_key);
+
+    uint8_t secret[32];
+    atcab_ecdh(1, eph_key, secret);
+
+    printf("Shared Secret: ");
+    phex(secret, 32);
+
+    // Save shared secret to state
+    edhoc_state.shared_secret.buf = malloc(32);
+    edhoc_state.shared_secret.len = 32;
+    memcpy(edhoc_state.shared_secret.buf, secret, 32);
+
+    // Encode session key
+    uint8_t enc_sess_key[256];
+    size_t n;
+    cwt_encode_ecc_key(session_key, enc_sess_key, sizeof(enc_sess_key), &n);
+
+    edhoc_msg_2 msg2 = {
+            .tag = 2,
+            .session_id = msg1.session_id,
+            .peer_session_id = edhoc_state.session_id,
+            .peer_nonce = {nonce, 8},
+            .peer_key = {enc_sess_key, n},
+    };
+
+    msg_2_context ctx2 = {
+            .shared_secret = (bytes) {secret, 32},
+            .message1 = edhoc_state.message1
+    };
+
+    unsigned char msg_serialized[512];
+    size_t len = edhoc_serialize_msg_2(&msg2, &ctx2, msg_serialized, sizeof(msg_serialized));
+
+    edhoc_state.message2.buf = malloc(len);
+    edhoc_state.message2.len = len;
+    memcpy(edhoc_state.message2.buf, msg_serialized, len);
+
+    printf("Sending EDHOC MSG: ");
+    phex(msg_serialized, len);
+
+    mg_send_head(nc, 200, len, "Content-Type: application/octet-stream");
+    mg_send(nc, msg_serialized, len);
 }
 
 static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_data) {
