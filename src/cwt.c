@@ -220,5 +220,5 @@ void cwt_encode_ecc_key(uint8_t* key, uint8_t* buffer, size_t buf_size, size_t* 
 
 void cwt_import_key(uint8_t* key, cose_key* cose) {
     memcpy(key, cose->x.buf, cose->x.len);
-    memcpy(key, cose->y.buf, cose->y.len);
+    memcpy(key+(cose->x.len), cose->y.buf, cose->y.len);
 }

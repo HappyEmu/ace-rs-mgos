@@ -173,6 +173,14 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
     uint8_t eph_key[64];
     cwt_import_key(eph_key, &cose_eph_key);
 
+    printf("Party Ephemeral Key is: {X:");
+    for (int i = 0; i < 32; i++)
+        printf("%02x", eph_key[i]);
+    printf(", Y:");
+    for (int i = 0; i < 32; i++)
+        printf("%02x", eph_key[32 + i]);
+    printf("}\n");
+
     uint8_t secret[32];
     atcab_ecdh(1, eph_key, secret);
 
