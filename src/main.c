@@ -3,12 +3,18 @@
 #include "mgos.h"
 #include "cryptoauthlib.h"
 #include "utils.h"
+#include "cwt.h"
+#include "cbor.h"
+
+#define AUDIENCE "tempSensor0"
 
 static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_data) ;
 static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_data) ;
 
-static const char *s_listening_address = "tcp://:8080";
+static const char *s_listening_address = "tcp://:8000";
 uint8_t ID[64];
+uint8_t AS_ID[64] = {0x5a, 0xee, 0xc3, 0x1f, 0x9e, 0x64, 0xaa, 0xd4, 0x5a, 0xba, 0x2d, 0x36, 0x5e, 0x71, 0xe8, 0x4d, 0xee, 0x0d, 0xa3, 0x31, 0xba, 0xda, 0xb9, 0x11, 0x8a, 0x25, 0x31, 0x50, 0x1f, 0xd9, 0x86, 0x1d,
+                     0x02, 0x7c, 0x99, 0x77, 0xca, 0x32, 0xd5, 0x44, 0xe6, 0x34, 0x26, 0x76, 0xef, 0x00, 0xfa, 0x43, 0x4b, 0x3a, 0xae, 0xd9, 0x9f, 0x48, 0x23, 0x75, 0x05, 0x17, 0xca, 0x33, 0x90, 0x37, 0x47, 0x53};
 
 static void http_handler(struct mg_connection *nc, int ev, void *p, void *user_data)
 {
@@ -21,10 +27,68 @@ static void http_handler(struct mg_connection *nc, int ev, void *p, void *user_d
     }
 }
 
+static size_t error_buffer(uint8_t* buf, size_t buf_len, char* text) {
+    CborEncoder enc;
+    cbor_encoder_init(&enc, buf, buf_len, 0);
+
+    CborEncoder map;
+    cbor_encoder_create_map(&enc, &map, 1);
+
+    cbor_encode_text_stringz(&map, "error");
+    cbor_encode_text_stringz(&map, text);
+    cbor_encoder_close_container(&enc, &map);
+
+    return cbor_encoder_get_buffer_size(&enc, buf);
+}
+
 static void authz_info_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
     // Parse HTTP Message
-    //struct http_message *hm = (struct http_message *) ev_data;
-    //struct mg_str data = hm->body;
+    struct http_message *hm = (struct http_message *) ev_data;
+    struct mg_str data = hm->body;
+
+    printf("Received CWT: ");
+    phex((void*)data.p, data.len);
+
+    // Parse CWT
+    rs_cwt cwt;
+    cwt_parse(&cwt, (void*) data.p, data.len);
+
+    // Verify CWT
+    bytes eaad = {.buf = NULL, .len = 0};
+
+    int verified = cwt_verify(&cwt, eaad, AS_ID);
+
+    if (verified != 1) {
+        // Not authorized!
+        uint8_t buf[128];
+        size_t len = error_buffer(buf, sizeof(buf), "Signature could not be verified!");
+
+        mg_send_head(nc, 401, (int64_t) len, "Content-Type: application/octet-stream");
+        mg_send(nc, buf, (int) len);
+
+        return;
+    }
+
+    // Parse Payload
+    rs_payload payload;
+    cwt_parse_payload(&cwt, &payload);
+
+    // Verify audience
+    if (strcmp(AUDIENCE, payload.aud) != 0) {
+        uint8_t buf[128];
+        size_t len = error_buffer(buf, sizeof(buf), "Audience mismatch!");
+
+        mg_send_head(nc, 403, (int64_t) len, "Content-Type: application/octet-stream");
+        mg_send(nc, buf, (int) len);
+
+        return;
+    }
+
+    /*cose_key cose_pop_key;
+    cwt_parse_cose_key(&payload.cnf, &cose_pop_key);
+
+    cwt_import_key(&edhoc_state.pop_key, &cose_pop_key);
+    int key_check = wc_ecc_check_key(&edhoc_state.pop_key);*/
 
     // Send response
     mg_send_head(nc, 204, 0, "Content-Type: application/octet-stream");

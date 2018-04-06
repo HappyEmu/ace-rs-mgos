@@ -70,7 +70,7 @@ int cwt_verify(rs_cwt* cwt, bytes eaad, uint8_t *key) {
     uint8_t* signature;
     size_t sig_len;
     cbor_value_dup_byte_string(&cwt->signature, &signature, &sig_len, NULL);
-
+    
     bool verified = 0;
     atcab_verify_extern(digest, signature, key, &verified);
     
@@ -84,7 +84,6 @@ void cwt_parse_payload(rs_cwt* cwt, rs_payload* out) {
     size_t len;
 
     cbor_value_dup_byte_string(&cwt->payload, &payload, &len, NULL);
-    phex(payload, len);
 
     CborParser parser;
     CborValue map;
