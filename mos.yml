@@ -1,0 +1,31 @@
+author: mongoose-os
+description: Resource Server implementation for ACE Framework
+# arch: PLATFORM
+version: 1.0
+manifest_version: 2017-05-18
+
+libs_version: ${mos_version}
+modules_version: ${mos_version}
+mongoose_os_version: ${mos_version}
+
+build_vars:
+  MGOS_ENABLE_I2C_GPIO: 0
+
+sources:
+  - src
+
+config_schema:
+  - ["i2c.enable", true]
+  - ["sys.atca.enable", true]
+  - ["i2c.sda_gpio", 21]
+  - ["i2c.scl_gpio", 22]
+
+libs:
+  - origin: https://github.com/mongoose-os-libs/wifi
+  - origin: https://github.com/mongoose-os-libs/rpc-service-config
+  - origin: https://github.com/mongoose-os-libs/rpc-uart
+  - origin: https://github.com/mongoose-os-libs/atca
+  - origin: https://github.com/mongoose-os-libs/rpc-service-atca
+
+tags:
+  - c
