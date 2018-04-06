@@ -2,6 +2,10 @@
 
 #include "mgos.h"
 #include "cryptoauthlib.h"
+#include "utils.h"
+
+static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_data) ;
+static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_data) ;
 
 static const char *s_listening_address = "tcp://:8080";
 uint8_t ID[64];
@@ -38,10 +42,55 @@ static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data,
 }
 
 static void edhoc_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
+    struct http_message *hm = (struct http_message *) ev_data;
+
+    char method[8];
+    sprintf(method, "%.*s", hm->method.len, hm->method.p);
+
+    if (strcmp(method, "POST") != 0) {
+        mg_send_head(nc, 404, 0, NULL);
+        return;
+    }
+
+    printf("Received EDHOC MSG: ");
+    phex((void*)hm->body.p, hm->body.len);
+
+    /*CborParser parser;
+    CborValue ary;
+    cbor_parser_init((void*)hm->body.p, hm->body.len, 0, &parser, &ary);
+
+    CborValue elem;
+    cbor_value_enter_container(&ary, &elem);
+
+    uint64_t tag;
+    cbor_value_get_uint64(&elem, &tag);*/
+    uint64_t tag = 1;
+
+    switch (tag) {
+        case 1:
+            edhoc_handler_message_1(nc, ev, ev_data);
+            break;
+        case 3:
+            edhoc_handler_message_3(nc, ev, ev_data);
+            break;
+        default: break;
+    }
+}
+
+static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_data) {
+    // Send response
     char response[64];
     int len = sprintf(response, "{\"edhoc\": %d}", 1);
     
+    mg_send_head(nc, 200, len, "Content-Type: application/json");
+    mg_send(nc, response, len);
+}
+
+static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_data) {
     // Send response
+    char response[64];
+    int len = sprintf(response, "{\"edhoc\": %d}", 3);
+    
     mg_send_head(nc, 200, len, "Content-Type: application/json");
     mg_send(nc, response, len);
 }
