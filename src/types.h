@@ -11,7 +11,7 @@ typedef struct bytes {
 
 typedef struct edhoc_server_session_state {
     bytes session_id;
-    uint8_t *pop_key;
+    uint8_t pop_key[64];
     bytes shared_secret;
     bytes message1;
     bytes message2;
