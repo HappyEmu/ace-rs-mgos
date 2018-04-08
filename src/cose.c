@@ -219,6 +219,10 @@ void cose_decrypt_enc0(bytes* enc0, uint8_t *key, uint8_t *iv, bytes* external_a
     // Return plaintext to caller
     memcpy(out, plaintext, sizeof(plaintext));
     *out_len = sizeof(plaintext);
+
+    // Clean up
+    free(protected.buf);
+    free(ciphertext.buf);
 }
 
 int cose_verify_sign1(bytes* sign1, uint8_t* key, bytes* external_aad) {
@@ -257,6 +261,11 @@ int cose_verify_sign1(bytes* sign1, uint8_t* key, bytes* external_aad) {
 
     bool verified = 0;
     atcab_verify_extern(digest, signature.buf, key, &verified);
+
+    // Cleanup
+    free(protected.buf);
+    free(payload.buf);
+    free(signature.buf);
 
     return verified;
 }
