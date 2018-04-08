@@ -8,6 +8,7 @@
 #include "cbor.h"
 
 #define AUDIENCE "tempSensor0"
+#define SHA256_DIGEST_SIZE 32
 
 static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_data) ;
 static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_data) ;
@@ -225,12 +226,72 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
 }
 
 static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_data) {
-    // Send response
-    char response[64];
-    int len = sprintf(response, "{\"edhoc\": %d}", 3);
-    
-    mg_send_head(nc, 200, len, "Content-Type: application/json");
-    mg_send(nc, response, len);
+    struct http_message *hm = (struct http_message *) ev_data;
+
+    // Save message3 for later
+    edhoc_state.message3.buf = malloc(hm->body.len);
+    edhoc_state.message3.len = hm->body.len;
+    memcpy(edhoc_state.message3.buf, hm->body.p, hm->body.len);
+
+    // Deserialize msg3
+    edhoc_msg_3 msg3;
+    edhoc_deserialize_msg3(&msg3, (void*)hm->body.p, hm->body.len);
+
+    // Compute aad3
+    uint8_t aad3[SHA256_DIGEST_SIZE];
+    edhoc_aad3(&msg3, &edhoc_state.message1, &edhoc_state.message2, aad3);
+
+    // Derive k3, iv3
+    bytes other = {aad3, SHA256_DIGEST_SIZE};
+
+    uint8_t context_info_k3[128];
+    size_t ci_k3_len;
+    cose_kdf_context("AES-CCM-64-64-128", 16, other, context_info_k3, sizeof(context_info_k3), &ci_k3_len);
+
+    uint8_t context_info_iv3[128];
+    size_t ci_iv3_len;
+    cose_kdf_context("IV-Generation", 7, other, context_info_iv3, sizeof(context_info_iv3), &ci_iv3_len);
+
+    bytes b_ci_k3 = {context_info_k3, ci_k3_len};
+    bytes b_ci_iv3 = {context_info_iv3, ci_iv3_len};
+
+    uint8_t k3[16];
+    derive_key(edhoc_state.shared_secret, b_ci_k3, k3, sizeof(k3));
+
+    uint8_t iv3[7];
+    derive_key(edhoc_state.shared_secret, b_ci_iv3, iv3, sizeof(iv3));
+
+    printf("AAD3: ");
+    phex(aad3, SHA256_DIGEST_SIZE);
+    printf("K3: ");
+    phex(k3, 16);
+    printf("IV3: ");
+    phex(iv3, 7);
+
+    bytes b_aad3 = {aad3, SHA256_DIGEST_SIZE};
+
+    uint8_t sig_u[256];
+    size_t sig_u_len;
+    cose_decrypt_enc0(&msg3.cose_enc_3, k3, iv3, &b_aad3, sig_u, sizeof(sig_u), &sig_u_len);
+
+    bytes b_sig_u = {sig_u, sig_u_len};
+    int verified = cose_verify_sign1(&b_sig_u, edhoc_state.pop_key, &b_aad3);
+
+    if (verified != 1) {
+        // Not authorized!
+        uint8_t buf[128];
+        size_t len = error_buffer(buf, sizeof(buf), "You are not the one who uploaded the token!");
+
+        mg_send_head(nc, 401, (int64_t) len, "Content-Type: application/octet-stream");
+        mg_send(nc, buf, (int) len);
+
+        return;
+    }
+
+    uint8_t *buf;
+    size_t buf_len = hexstring_to_buffer(&buf, "81624f4b", strlen("81624f4b"));
+    mg_send_head(nc, 401, (int64_t) buf_len, "Content-Type: application/octet-stream");
+    mg_send(nc, buf, (int) buf_len);
 }
 
 enum mgos_app_init_result mgos_app_init(void)
