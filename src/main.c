@@ -99,12 +99,56 @@ static void authz_info_handler(struct mg_connection* nc, int ev, void* ev_data, 
 static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
     int temperature = 30;
 
-    char response[64];
-    int len = sprintf(response, "{\"temperature\": %d}", temperature);
+    /// Create Response
+    uint8_t response[128];
+    CborEncoder enc;
+    cbor_encoder_init(&enc, response, sizeof(response), 0);
 
-    // Send response
-    mg_send_head(nc, 200, len, "Content-Type: application/json");
-    mg_send(nc, response, len);
+    CborEncoder map;
+    cbor_encoder_create_map(&enc, &map, 1);
+    cbor_encode_text_stringz(&map, "temperature");
+    cbor_encode_int(&map, temperature);
+    cbor_encoder_close_container(&enc, &map);
+
+    size_t len = cbor_encoder_get_buffer_size(&enc, response);
+
+    /// Compute OSCORE Context
+    uint8_t exchange_hash[SHA256_DIGEST_SIZE];
+    oscore_exchange_hash(&edhoc_state.message1, &edhoc_state.message2, &edhoc_state.message3, exchange_hash);
+
+    bytes ex_hash = {exchange_hash, SHA256_DIGEST_SIZE};
+
+    // Master Secret
+    uint8_t ci_secret[128];
+    size_t ci_secret_len;
+    cose_kdf_context("EDHOC OSCORE Master Secret", 16, ex_hash, ci_secret, sizeof(ci_secret), &ci_secret_len);
+    bytes b_ci_secret = {ci_secret, ci_secret_len};
+
+    // Master Salt
+    uint8_t ci_salt[128];
+    size_t ci_salt_len;
+    cose_kdf_context("EDHOC OSCORE Master Salt", 7, ex_hash, ci_salt, sizeof(ci_salt), &ci_salt_len);
+    bytes b_ci_salt = {ci_salt, ci_salt_len};
+
+    uint8_t master_secret[16];
+    derive_key(edhoc_state.shared_secret, b_ci_secret, master_secret, sizeof(master_secret));
+
+    uint8_t master_salt[7];
+    derive_key(edhoc_state.shared_secret, b_ci_salt, master_salt, sizeof(master_salt));
+
+    printf("MASTER SALT: ");
+    phex(master_salt, sizeof(master_salt));
+    printf("MASTER SECRET: ");
+    phex(master_secret, sizeof(master_secret));
+
+    /// Encrypt response
+    cose_encrypt0 enc_response = {.plaintext = (bytes) {response, len}, .external_aad = {NULL, 0}};
+    uint8_t res[256];
+    size_t res_len;
+    cose_encode_encrypted(&enc_response, master_secret, master_salt, res, sizeof(res), &res_len);
+
+    mg_send_head(nc, 200, (int64_t) res_len, "Content-Type: application/octet-stream");
+    mg_send(nc, res, (int) res_len);
 }
 
 static void edhoc_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
