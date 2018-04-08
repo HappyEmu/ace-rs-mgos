@@ -3,6 +3,7 @@
 #include "cbor.h"
 #include "cryptoauthlib.h"
 #include "mbedtls/ccm.h"
+#include "hkdf.h"
 
 #define DIGEST_SIZE 32
 #define TAG_SIZE 8
@@ -162,6 +163,12 @@ void cose_kdf_context(const char* algorithm_id, int key_length, bytes other, uin
 
 void derive_key(bytes input_key, bytes info, uint8_t* out, size_t out_size) {
     // TODO
+    const mbedtls_md_info_t *sha256 = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+    mbedtls_hkdf(sha256, NULL, 0, input_key.buf, input_key.len, info.buf, info.len, out, out_size);
+    /*int mbedtls_hkdf( const mbedtls_md_info_t *md, const unsigned char *salt,
+                  size_t salt_len, const unsigned char *ikm, size_t ikm_len,
+                  const unsigned char *info, size_t info_len,
+                  unsigned char *okm, size_t okm_len )*/
     // wc_HKDF(SHA256, input_key.buf, (word32) input_key.len, NULL, 0, info.buf, (word32) info.len, out, (word32) out_size);
 }
 
