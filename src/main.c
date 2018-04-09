@@ -92,6 +92,13 @@ static void authz_info_handler(struct mg_connection* nc, int ev, void* ev_data, 
     cwt_parse_cose_key(&payload.cnf, &cose_pop_key);
     cwt_import_key(edhoc_state.pop_key, &cose_pop_key);
 
+    // Free resources
+    free(payload.cnf.buf);
+    free(payload.aud);
+    free(cose_pop_key.kid.buf);
+    free(cose_pop_key.x.buf);
+    free(cose_pop_key.y.buf);
+
     // Send response
     mg_send_head(nc, 204, 0, "Content-Type: application/octet-stream");
 }
@@ -194,6 +201,7 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
     edhoc_deserialize_msg1(&msg1, (void*)hm->body.p, hm->body.len);
 
     // Save message1 for later
+    free(edhoc_state.message1.buf);
     edhoc_state.message1.buf = malloc(hm->body.len);
     edhoc_state.message1.len = hm->body.len;
     memcpy(edhoc_state.message1.buf, hm->body.p, hm->body.len);
@@ -233,6 +241,7 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
     phex(secret, 32);
 
     // Save shared secret to state
+    free(edhoc_state.shared_secret.buf);
     edhoc_state.shared_secret.buf = malloc(32);
     edhoc_state.shared_secret.len = 32;
     memcpy(edhoc_state.shared_secret.buf, secret, 32);
@@ -258,12 +267,18 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
     unsigned char msg_serialized[512];
     size_t len = edhoc_serialize_msg_2(&msg2, &ctx2, msg_serialized, sizeof(msg_serialized));
 
+    free(edhoc_state.message2.buf);
     edhoc_state.message2.buf = malloc(len);
     edhoc_state.message2.len = len;
     memcpy(edhoc_state.message2.buf, msg_serialized, len);
 
     printf("Sending EDHOC MSG: ");
     phex(msg_serialized, len);
+
+    // Cleanup
+    free(msg1.session_id.buf);
+    free(msg1.nonce.buf);
+    free(msg1.eph_key.buf);
 
     mg_send_head(nc, 200, len, "Content-Type: application/octet-stream");
     mg_send(nc, msg_serialized, len);
@@ -273,6 +288,7 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
     struct http_message *hm = (struct http_message *) ev_data;
 
     // Save message3 for later
+    free(edhoc_state.message3.buf);
     edhoc_state.message3.buf = malloc(hm->body.len);
     edhoc_state.message3.len = hm->body.len;
     memcpy(edhoc_state.message3.buf, hm->body.p, hm->body.len);
@@ -332,10 +348,17 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
         return;
     }
 
+    // Cleanup
+    free(msg3.peer_session_id.buf);
+    free(msg3.cose_enc_3.buf);
+
+    // Send response (OK)
     uint8_t *buf;
     size_t buf_len = hexstring_to_buffer(&buf, "81624f4b", strlen("81624f4b"));
     mg_send_head(nc, 401, (int64_t) buf_len, "Content-Type: application/octet-stream");
     mg_send(nc, buf, (int) buf_len);
+    
+    free(buf);
 }
 
 enum mgos_app_init_result mgos_app_init(void)

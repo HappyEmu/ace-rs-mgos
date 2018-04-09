@@ -21,6 +21,10 @@ void edhoc_deserialize_msg1(edhoc_msg_1 *msg1, uint8_t* buffer, size_t len) {
     cbor_value_dup_byte_string(&elem, &msg1->session_id.buf, &msg1->session_id.len, &elem);
     cbor_value_dup_byte_string(&elem, &msg1->nonce.buf, &msg1->nonce.len, &elem);
     cbor_value_dup_byte_string(&elem, &msg1->eph_key.buf, &msg1->eph_key.len, &elem);
+
+    // must free msg.session_id
+    // must free msg.nonce
+    // must free msg.eph_key
 }
 
 void edhoc_deserialize_msg3(edhoc_msg_3 *msg3, uint8_t* buffer, size_t len) {
@@ -46,6 +50,9 @@ void edhoc_deserialize_msg3(edhoc_msg_3 *msg3, uint8_t* buffer, size_t len) {
 
     msg3->peer_session_id = (struct bytes) { peer_sess_id, peer_sess_id_length };
     msg3->cose_enc_3      = (struct bytes) { cose_enc_3,   cose_enc_3_length };
+    
+    // must free msg.peer_session_id
+    // must free msg.cose_enc_3
 }
 
 size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned char* buffer, size_t buf_size) {
