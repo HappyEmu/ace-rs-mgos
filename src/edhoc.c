@@ -170,6 +170,9 @@ void edhoc_msg2_sig_v(edhoc_msg_2 *msg2, uint8_t* aad2,
     sig_v.external_aad = (bytes) {(uint8_t *) aad2, DIGEST_SIZE};
 
     cose_encode_signed(&sig_v, out, out_size, out_len);
+
+    free(prot_header);
+    free(unprot_header);
 }
 
 void edhoc_msg2_enc_0(edhoc_msg_2 *msg2, uint8_t *aad2, bytes *sig_v, bytes *key, bytes *iv,

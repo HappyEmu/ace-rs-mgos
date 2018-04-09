@@ -14,7 +14,10 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
 static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_data) ;
 
 static const char *s_listening_address = "tcp://:8000";
+
 static edhoc_server_session_state edhoc_state;
+uint8_t state_mem[512 * 3];
+
 uint8_t ID[64];
 uint8_t AS_ID[64] = {0x5a, 0xee, 0xc3, 0x1f, 0x9e, 0x64, 0xaa, 0xd4, 0x5a, 0xba, 0x2d, 0x36, 0x5e, 0x71, 0xe8, 0x4d, 0xee, 0x0d, 0xa3, 0x31, 0xba, 0xda, 0xb9, 0x11, 0x8a, 0x25, 0x31, 0x50, 0x1f, 0xd9, 0x86, 0x1d,
                      0x02, 0x7c, 0x99, 0x77, 0xca, 0x32, 0xd5, 0x44, 0xe6, 0x34, 0x26, 0x76, 0xef, 0x00, 0xfa, 0x43, 0x4b, 0x3a, 0xae, 0xd9, 0x9f, 0x48, 0x23, 0x75, 0x05, 0x17, 0xca, 0x33, 0x90, 0x37, 0x47, 0x53};
@@ -201,8 +204,6 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
     edhoc_deserialize_msg1(&msg1, (void*)hm->body.p, hm->body.len);
 
     // Save message1 for later
-    free(edhoc_state.message1.buf);
-    edhoc_state.message1.buf = malloc(hm->body.len);
     edhoc_state.message1.len = hm->body.len;
     memcpy(edhoc_state.message1.buf, hm->body.p, hm->body.len);
 
@@ -241,9 +242,6 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
     phex(secret, 32);
 
     // Save shared secret to state
-    free(edhoc_state.shared_secret.buf);
-    edhoc_state.shared_secret.buf = malloc(32);
-    edhoc_state.shared_secret.len = 32;
     memcpy(edhoc_state.shared_secret.buf, secret, 32);
 
     // Encode session key
@@ -267,8 +265,6 @@ static void edhoc_handler_message_1(struct mg_connection* nc, int ev, void* ev_d
     unsigned char msg_serialized[512];
     size_t len = edhoc_serialize_msg_2(&msg2, &ctx2, msg_serialized, sizeof(msg_serialized));
 
-    free(edhoc_state.message2.buf);
-    edhoc_state.message2.buf = malloc(len);
     edhoc_state.message2.len = len;
     memcpy(edhoc_state.message2.buf, msg_serialized, len);
 
@@ -288,8 +284,6 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
     struct http_message *hm = (struct http_message *) ev_data;
 
     // Save message3 for later
-    free(edhoc_state.message3.buf);
-    edhoc_state.message3.buf = malloc(hm->body.len);
     edhoc_state.message3.len = hm->body.len;
     memcpy(edhoc_state.message3.buf, hm->body.p, hm->body.len);
 
@@ -379,6 +373,13 @@ enum mgos_app_init_result mgos_app_init(void)
     mg_register_http_endpoint(nc, "/authz-info", authz_info_handler, 0);
     mg_register_http_endpoint(nc, "/.well-known/edhoc", edhoc_handler, 0);
     mg_register_http_endpoint(nc, "/temperature", temperature_handler, 0);
+
+    // Allocate space for stored messages
+    edhoc_state.message1.buf = state_mem;
+    edhoc_state.message2.buf = state_mem + 512;
+    edhoc_state.message3.buf = state_mem + 1024; 
+    edhoc_state.shared_secret.buf = malloc(32);
+    edhoc_state.shared_secret.len = 32;
 
     // Generate ID
     atcab_get_pubkey(0, ID);

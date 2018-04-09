@@ -108,6 +108,9 @@ void cose_encode_encrypted(cose_encrypt0 *enc0, uint8_t *key, uint8_t *iv, uint8
     cbor_encoder_close_container(&enc, &ary);
 
     *out_len = cbor_encoder_get_buffer_size(&enc, out);
+
+    // Cleanup
+    free(prot_header);
 }
 
 void cose_enc0_structure(bytes* body_protected, bytes* external_aad,
