@@ -358,7 +358,7 @@ enum mgos_app_init_result mgos_app_init(void)
     mg_register_http_endpoint(nc, "/temperature", temperature_handler, 0);
 
     // Generate ID
-    atcab_genkey(0, ID);
+    atcab_get_pubkey(0, ID);
     printf("RS public ID is: {X:");
     for (int i = 0; i < 32; i++)
         printf("%02x", ID[i]);
@@ -366,6 +366,15 @@ enum mgos_app_init_result mgos_app_init(void)
     for (int i = 0; i < 32; i++)
         printf("%02x", ID[32 + i]);
     printf("}\n");
+
+    // Print slot config
+    printf("Key Slot: ");
+    bool locked = 0;
+    for (int i = 0; i < 16; i++) {
+        atcab_is_slot_locked(i, &locked);
+        printf("Slot %i: %i\n", i, locked);
+    }
+    printf("\n");
 
     return MGOS_APP_INIT_SUCCESS;
 }
