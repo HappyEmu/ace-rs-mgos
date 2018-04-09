@@ -127,7 +127,7 @@ void cose_enc0_structure(bytes* body_protected, bytes* external_aad,
     *out_len = cbor_encoder_get_buffer_size(&enc, out);
 }
 
-void cose_kdf_context(const char* algorithm_id, int key_length, bytes other, uint8_t* out, size_t out_size, size_t *out_len) {
+void cose_kdf_context(const char* algorithm_id, int key_length, bytes *other, uint8_t* out, size_t out_size, size_t *out_len) {
     CborEncoder enc;
     cbor_encoder_init(&enc, out, out_size, 0);
 
@@ -153,7 +153,7 @@ void cose_kdf_context(const char* algorithm_id, int key_length, bytes other, uin
     cbor_encoder_create_array(&ary, &suppPubInfo, 3);
     cbor_encode_int(&suppPubInfo, key_length);
     cbor_encode_byte_string(&suppPubInfo, NULL, 0);
-    cbor_encode_byte_string(&suppPubInfo, other.buf, other.len);
+    cbor_encode_byte_string(&suppPubInfo, other->buf, other->len);
     cbor_encoder_close_container(&ary, &suppPubInfo);
 
     cbor_encoder_close_container(&enc, &ary);
@@ -161,10 +161,10 @@ void cose_kdf_context(const char* algorithm_id, int key_length, bytes other, uin
     *out_len = cbor_encoder_get_buffer_size(&enc, out);
 }
 
-void derive_key(bytes input_key, bytes info, uint8_t* out, size_t out_size) {
+void derive_key(bytes *input_key, bytes *info, uint8_t* out, size_t out_size) {
     // TODO
     const mbedtls_md_info_t *sha256 = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
-    mbedtls_hkdf(sha256, NULL, 0, input_key.buf, input_key.len, info.buf, info.len, out, out_size);
+    mbedtls_hkdf(sha256, NULL, 0, input_key->buf, input_key->len, info->buf, info->len, out, out_size);
     /*int mbedtls_hkdf( const mbedtls_md_info_t *md, const unsigned char *salt,
                   size_t salt_len, const unsigned char *ikm, size_t ikm_len,
                   const unsigned char *info, size_t info_len,

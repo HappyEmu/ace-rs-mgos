@@ -59,7 +59,7 @@ static void authz_info_handler(struct mg_connection* nc, int ev, void* ev_data, 
     // Verify CWT
     bytes eaad = {.buf = NULL, .len = 0};
 
-    int verified = cwt_verify(&cwt, eaad, AS_ID);
+    int verified = cwt_verify(&cwt, &eaad, AS_ID);
 
     if (verified != 1) {
         // Not authorized!
@@ -128,20 +128,20 @@ static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data,
     // Master Secret
     uint8_t ci_secret[128];
     size_t ci_secret_len;
-    cose_kdf_context("EDHOC OSCORE Master Secret", 16, ex_hash, ci_secret, sizeof(ci_secret), &ci_secret_len);
+    cose_kdf_context("EDHOC OSCORE Master Secret", 16, &ex_hash, ci_secret, sizeof(ci_secret), &ci_secret_len);
     bytes b_ci_secret = {ci_secret, ci_secret_len};
 
     // Master Salt
     uint8_t ci_salt[128];
     size_t ci_salt_len;
-    cose_kdf_context("EDHOC OSCORE Master Salt", 7, ex_hash, ci_salt, sizeof(ci_salt), &ci_salt_len);
+    cose_kdf_context("EDHOC OSCORE Master Salt", 7, &ex_hash, ci_salt, sizeof(ci_salt), &ci_salt_len);
     bytes b_ci_salt = {ci_salt, ci_salt_len};
 
     uint8_t master_secret[16];
-    derive_key(edhoc_state.shared_secret, b_ci_secret, master_secret, sizeof(master_secret));
+    derive_key(&edhoc_state.shared_secret, &b_ci_secret, master_secret, sizeof(master_secret));
 
     uint8_t master_salt[7];
-    derive_key(edhoc_state.shared_secret, b_ci_salt, master_salt, sizeof(master_salt));
+    derive_key(&edhoc_state.shared_secret, &b_ci_salt, master_salt, sizeof(master_salt));
 
     printf("MASTER SALT: ");
     phex(master_salt, sizeof(master_salt));
@@ -306,20 +306,20 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
 
     uint8_t context_info_k3[128];
     size_t ci_k3_len;
-    cose_kdf_context("AES-CCM-64-64-128", 16, other, context_info_k3, sizeof(context_info_k3), &ci_k3_len);
+    cose_kdf_context("AES-CCM-64-64-128", 16, &other, context_info_k3, sizeof(context_info_k3), &ci_k3_len);
 
     uint8_t context_info_iv3[128];
     size_t ci_iv3_len;
-    cose_kdf_context("IV-Generation", 7, other, context_info_iv3, sizeof(context_info_iv3), &ci_iv3_len);
+    cose_kdf_context("IV-Generation", 7, &other, context_info_iv3, sizeof(context_info_iv3), &ci_iv3_len);
 
     bytes b_ci_k3 = {context_info_k3, ci_k3_len};
     bytes b_ci_iv3 = {context_info_iv3, ci_iv3_len};
 
     uint8_t k3[16];
-    derive_key(edhoc_state.shared_secret, b_ci_k3, k3, sizeof(k3));
+    derive_key(&edhoc_state.shared_secret, &b_ci_k3, k3, sizeof(k3));
 
     uint8_t iv3[7];
-    derive_key(edhoc_state.shared_secret, b_ci_iv3, iv3, sizeof(iv3));
+    derive_key(&edhoc_state.shared_secret, &b_ci_iv3, iv3, sizeof(iv3));
 
     printf("AAD3: ");
     phex(aad3, SHA256_DIGEST_SIZE);

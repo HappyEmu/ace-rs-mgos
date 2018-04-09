@@ -36,7 +36,7 @@ void cwt_parse(rs_cwt* cwt, uint8_t* encoded, size_t len) {
     cwt->signature = elem;
 }
 
-int cwt_verify(rs_cwt* cwt, bytes eaad, uint8_t *key) {
+int cwt_verify(rs_cwt* cwt, bytes *eaad, uint8_t *key) {
     CborEncoder enc;
     uint8_t buffer[256];
     cbor_encoder_init(&enc, buffer, 256, 0);
@@ -51,7 +51,7 @@ int cwt_verify(rs_cwt* cwt, bytes eaad, uint8_t *key) {
     cbor_encode_byte_string(&ary, protected, len);
     free(protected);
 
-    cbor_encode_byte_string(&ary, eaad.buf, eaad.len);
+    cbor_encode_byte_string(&ary, eaad->buf, eaad->len);
 
     uint8_t* payload;
     size_t p_len;

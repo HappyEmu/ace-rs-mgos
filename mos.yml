@@ -10,6 +10,8 @@ mongoose_os_version: ${mos_version}
 
 build_vars:
   MGOS_ENABLE_I2C_GPIO: 0
+  MGOS_ENABLE_HEAP_LOG: 1
+  MGOS_ENABLE_CALL_TRACE: 1
 
 sources:
   - src

@@ -36,7 +36,7 @@ typedef struct rs_payload {
 } rs_payload;
 
 void cwt_parse(rs_cwt* cwt, uint8_t* encoded, size_t len);
-int cwt_verify(rs_cwt* cwt, bytes eaad, uint8_t *key);
+int cwt_verify(rs_cwt* cwt, bytes *eaad, uint8_t *key);
 void cwt_parse_payload(rs_cwt* cwt, rs_payload*);
 void cwt_parse_cose_key(bytes* encoded, cose_key* out);
 void cwt_encode_cose_key(cose_key* key, uint8_t* buffer, size_t buf_size, size_t* len);
