@@ -17,6 +17,7 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
 static const char *s_listening_address = "tcp://:8000";
 
 static edhoc_server_session_state edhoc_state;
+static oscore_context context;
 uint8_t state_mem[512 * 3];
 static struct mgos_dht *s_dht = NULL;
 
@@ -33,6 +34,34 @@ static void http_handler(struct mg_connection *nc, int ev, void *p, void *user_d
         mg_send_head(nc, 200, hm->message.len, "Content-Type: text/plain");
         mg_printf(nc, "%.*s", (int)hm->message.len, hm->message.p);
     }
+}
+
+static void compute_oscore_context() {
+    /// Compute OSCORE Context
+    uint8_t exchange_hash[SHA256_DIGEST_SIZE];
+    oscore_exchange_hash(&edhoc_state.message1, &edhoc_state.message2, &edhoc_state.message3, exchange_hash);
+
+    bytes ex_hash = {exchange_hash, SHA256_DIGEST_SIZE};
+
+    // Master Secret
+    uint8_t ci_secret[128];
+    size_t ci_secret_len;
+    cose_kdf_context("EDHOC OSCORE Master Secret", 16, &ex_hash, ci_secret, sizeof(ci_secret), &ci_secret_len);
+    bytes b_ci_secret = {ci_secret, ci_secret_len};
+
+    // Master Salt
+    uint8_t ci_salt[128];
+    size_t ci_salt_len;
+    cose_kdf_context("EDHOC OSCORE Master Salt", 7, &ex_hash, ci_salt, sizeof(ci_salt), &ci_salt_len);
+    bytes b_ci_salt = {ci_salt, ci_salt_len};
+    
+    derive_key(&edhoc_state.shared_secret, &b_ci_secret, context.master_secret, 16);
+    derive_key(&edhoc_state.shared_secret, &b_ci_salt, context.master_salt, 7);
+    
+    printf("MASTER SECRET: ");
+    phex(context.master_secret, 16);
+    printf("MASTER SALT: ");
+    phex(context.master_salt, 7);
 }
 
 static size_t error_buffer(uint8_t* buf, size_t buf_len, char* text) {
@@ -127,43 +156,19 @@ static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data,
 
     size_t len = cbor_encoder_get_buffer_size(&enc, response);
 
-    /// Compute OSCORE Context
-    uint8_t exchange_hash[SHA256_DIGEST_SIZE];
-    oscore_exchange_hash(&edhoc_state.message1, &edhoc_state.message2, &edhoc_state.message3, exchange_hash);
-
-    bytes ex_hash = {exchange_hash, SHA256_DIGEST_SIZE};
-
-    // Master Secret
-    uint8_t ci_secret[128];
-    size_t ci_secret_len;
-    cose_kdf_context("EDHOC OSCORE Master Secret", 16, &ex_hash, ci_secret, sizeof(ci_secret), &ci_secret_len);
-    bytes b_ci_secret = {ci_secret, ci_secret_len};
-
-    // Master Salt
-    uint8_t ci_salt[128];
-    size_t ci_salt_len;
-    cose_kdf_context("EDHOC OSCORE Master Salt", 7, &ex_hash, ci_salt, sizeof(ci_salt), &ci_salt_len);
-    bytes b_ci_salt = {ci_salt, ci_salt_len};
-
-    uint8_t master_secret[16];
-    derive_key(&edhoc_state.shared_secret, &b_ci_secret, master_secret, sizeof(master_secret));
-
-    uint8_t master_salt[7];
-    derive_key(&edhoc_state.shared_secret, &b_ci_salt, master_salt, sizeof(master_salt));
-
-    printf("MASTER SALT: ");
-    phex(master_salt, sizeof(master_salt));
-    printf("MASTER SECRET: ");
-    phex(master_secret, sizeof(master_secret));
-
     /// Encrypt response
     cose_encrypt0 enc_response = {.plaintext = (bytes) {response, len}, .external_aad = {NULL, 0}};
     uint8_t res[256];
     size_t res_len;
-    cose_encode_encrypted(&enc_response, master_secret, master_salt, res, sizeof(res), &res_len);
+    cose_encode_encrypted(&enc_response, context.master_secret, context.master_salt, res, sizeof(res), &res_len);
 
     mg_send_head(nc, 200, (int64_t) res_len, "Content-Type: application/octet-stream");
     mg_send(nc, res, (int) res_len);
+}
+
+static void set_led_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
+    struct http_message *hm = (struct http_message *) ev_data;
+    struct mg_str data = hm->body;
 }
 
 static void edhoc_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
@@ -196,6 +201,7 @@ static void edhoc_handler(struct mg_connection* nc, int ev, void* ev_data, void 
             break;
         case 3:
             edhoc_handler_message_3(nc, ev, ev_data);
+            compute_oscore_context();
             break;
         default: break;
     }
@@ -378,6 +384,7 @@ enum mgos_app_init_result mgos_app_init(void)
     mg_register_http_endpoint(nc, "/authz-info", authz_info_handler, 0);
     mg_register_http_endpoint(nc, "/.well-known/edhoc", edhoc_handler, 0);
     mg_register_http_endpoint(nc, "/temperature", temperature_handler, 0);
+    mg_register_http_endpoint(nc, "/led", set_led_handler, 0);
 
     // Allocate space for stored messages
     edhoc_state.message1.buf = state_mem;

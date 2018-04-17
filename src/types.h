@@ -18,4 +18,9 @@ typedef struct edhoc_server_session_state {
     bytes message3;
 } edhoc_server_session_state;
 
+typedef struct oscore_context {
+    uint8_t master_secret[16];
+    uint8_t master_salt[7];
+} oscore_context;
+
 #endif //RS_HTTP_RS_TYPES_H
