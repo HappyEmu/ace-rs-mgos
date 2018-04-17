@@ -29,6 +29,7 @@ libs:
   - origin: https://github.com/mongoose-os-libs/atca
   - origin: https://github.com/mongoose-os-libs/rpc-service-atca
   - origin: https://github.com/HappyEmu/mgos-cbor
+  - origin: https://github.com/mongoose-os-libs/dht
 
 tags:
   - c

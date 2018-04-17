@@ -6,6 +6,7 @@
 #include "cwt.h"
 #include "edhoc.h"
 #include "cbor.h"
+#include "mgos_dht.h"
 
 #define AUDIENCE "tempSensor0"
 #define SHA256_DIGEST_SIZE 32
@@ -17,6 +18,7 @@ static const char *s_listening_address = "tcp://:8000";
 
 static edhoc_server_session_state edhoc_state;
 uint8_t state_mem[512 * 3];
+static struct mgos_dht *s_dht = NULL;
 
 uint8_t ID[64];
 uint8_t AS_ID[64] = {0x5a, 0xee, 0xc3, 0x1f, 0x9e, 0x64, 0xaa, 0xd4, 0x5a, 0xba, 0x2d, 0x36, 0x5e, 0x71, 0xe8, 0x4d, 0xee, 0x0d, 0xa3, 0x31, 0xba, 0xda, 0xb9, 0x11, 0x8a, 0x25, 0x31, 0x50, 0x1f, 0xd9, 0x86, 0x1d,
@@ -107,7 +109,8 @@ static void authz_info_handler(struct mg_connection* nc, int ev, void* ev_data, 
 }
 
 static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
-    int temperature = 30;
+    int temperature = (int) mgos_dht_get_temp(s_dht);
+    int humidity = (int) mgos_dht_get_humidity(s_dht);
 
     /// Create Response
     uint8_t response[128];
@@ -115,9 +118,11 @@ static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data,
     cbor_encoder_init(&enc, response, sizeof(response), 0);
 
     CborEncoder map;
-    cbor_encoder_create_map(&enc, &map, 1);
+    cbor_encoder_create_map(&enc, &map, 2);
     cbor_encode_text_stringz(&map, "temperature");
     cbor_encode_int(&map, temperature);
+    cbor_encode_text_stringz(&map, "humidity");
+    cbor_encode_int(&map, humidity);
     cbor_encoder_close_container(&enc, &map);
 
     size_t len = cbor_encoder_get_buffer_size(&enc, response);
@@ -399,6 +404,14 @@ enum mgos_app_init_result mgos_app_init(void)
         printf("Slot %i: %i\n", i, locked);
     }
     printf("\n");
+
+    // Configure LED actuator
+    mgos_gpio_set_mode(25, MGOS_GPIO_MODE_OUTPUT);
+    mgos_gpio_write(25, 0);
+
+    // Initialize Temperature sensor
+    if ((s_dht = mgos_dht_create(5, DHT22)) == NULL) 
+        return MGOS_APP_INIT_ERROR;
 
     return MGOS_APP_INIT_SUCCESS;
 }
