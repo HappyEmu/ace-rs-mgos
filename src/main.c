@@ -168,7 +168,29 @@ static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data,
 
 static void set_led_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
     struct http_message *hm = (struct http_message *) ev_data;
-    struct mg_str data = hm->body;
+    bytes ciphertext = {(void*)hm->body.p, hm->body.len};
+    bytes aad = {NULL, 0};
+
+    // Decrypt payload
+    uint8_t payload[32];
+    size_t payload_length = 0;
+    cose_decrypt_enc0(&ciphertext, context.master_secret, context.master_salt, &aad, payload, sizeof(payload), &payload_length);
+
+    // Parse payload
+    CborParser parser;
+    CborValue val;
+    cbor_parser_init(payload, payload_length, 0, &parser, &val);
+
+    int led_value = 0;
+    cbor_value_get_int(&val, &led_value);
+
+    printf("Setting LED value to %d\n", led_value);
+
+    // Write new value to LED
+    mgos_gpio_write(25, led_value);
+
+    // Respond
+    mg_send_head(nc, 204, 0, NULL);
 }
 
 static void edhoc_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
