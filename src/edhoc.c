@@ -66,8 +66,8 @@ size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned
     edhoc_msg2_sig_v(msg2, aad2, sig_v, sizeof(sig_v), &sig_v_len);
 
     bytes b_sig_v = {sig_v, sig_v_len};
-    printf("siv_v: ");
-    phex(sig_v, sig_v_len);
+    //printf("sig_v: ");
+    //phex(sig_v, sig_v_len);
 
     // Derive keys
     bytes other = {aad2, DIGEST_SIZE};
@@ -89,8 +89,8 @@ size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned
     uint8_t iv2[7];
     derive_key(&context->shared_secret, &b_ci_iv2, iv2, sizeof(iv2));
 
-    printf("AAD2: ");
-    phex(aad2, DIGEST_SIZE);
+    //printf("AAD2: ");
+    //phex(aad2, DIGEST_SIZE);
     printf("K2: ");
     phex(k2, 16);
     printf("IV2: ");
@@ -141,11 +141,11 @@ void edhoc_aad2(edhoc_msg_2 *msg2, bytes message1, uint8_t *out_hash) {
     cbor_encoder_close_container(&enc, &ary);
     size_t data2_len = cbor_encoder_get_buffer_size(&enc, data2);
 
-    printf("data2: ");
-    phex(data2, data2_len);
+    //printf("data2: ");
+    //phex(data2, data2_len);
 
-    printf("message1: ");
-    phex(message1.buf, message1.len);
+    //printf("message1: ");
+    //phex(message1.buf, message1.len);
 
     // Compute aad2
     uint8_t aad2[message1.len + data2_len];

@@ -16,8 +16,8 @@ void cose_encode_signed(cose_sign1* sign1,
     cose_sign1_structure("Signature1", &sign1->protected_header, &sign1->external_aad, &sign1->payload,
                          sign_structure, sizeof(sign_structure), &sign_struct_len);
 
-    printf("to_verify: ");
-    phex(sign_structure, sign_struct_len);
+    //printf("to_verify: ");
+    //phex(sign_structure, sign_struct_len);
 
     // Hash sign structure
     uint8_t digest[DIGEST_SIZE];

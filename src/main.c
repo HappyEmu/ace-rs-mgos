@@ -348,8 +348,8 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
     uint8_t iv3[7];
     derive_key(&edhoc_state.shared_secret, &b_ci_iv3, iv3, sizeof(iv3));
 
-    printf("AAD3: ");
-    phex(aad3, SHA256_DIGEST_SIZE);
+    // printf("AAD3: ");
+    // phex(aad3, SHA256_DIGEST_SIZE);
     printf("K3: ");
     phex(k3, 16);
     printf("IV3: ");
@@ -382,7 +382,7 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
     // Send response (OK)
     uint8_t *buf;
     size_t buf_len = hexstring_to_buffer(&buf, "81624f4b", strlen("81624f4b"));
-    mg_send_head(nc, 401, (int64_t) buf_len, "Content-Type: application/octet-stream");
+    mg_send_head(nc, 201, (int64_t) buf_len, "Content-Type: application/octet-stream");
     mg_send(nc, buf, (int) buf_len);
     
     free(buf);
@@ -390,7 +390,7 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
 
 enum mgos_app_init_result mgos_app_init(void)
 {
-    printf("Hello, world!\n");
+    printf("App init...\n");
     struct mg_connection *nc;
 
     nc = mg_bind(mgos_get_mgr(), s_listening_address, http_handler, 0);
@@ -426,13 +426,13 @@ enum mgos_app_init_result mgos_app_init(void)
     printf("}\n");
 
     // Print slot config
-    printf("Key Slot: ");
+    /*printf("Key Slot: ");
     bool locked = 0;
     for (int i = 0; i < 16; i++) {
         atcab_is_slot_locked(i, &locked);
         printf("Slot %i: %i\n", i, locked);
     }
-    printf("\n");
+    printf("\n");*/
 
     // Configure LED actuator
     mgos_gpio_set_mode(25, MGOS_GPIO_MODE_OUTPUT);
