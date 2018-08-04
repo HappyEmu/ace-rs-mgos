@@ -52,16 +52,16 @@ static void compute_oscore_context() {
     // Master Salt
     uint8_t ci_salt[128];
     size_t ci_salt_len;
-    cose_kdf_context("EDHOC OSCORE Master Salt", 7, &ex_hash, ci_salt, sizeof(ci_salt), &ci_salt_len);
+    cose_kdf_context("EDHOC OSCORE Master Salt", 8, &ex_hash, ci_salt, sizeof(ci_salt), &ci_salt_len);
     bytes b_ci_salt = {ci_salt, ci_salt_len};
     
     derive_key(&edhoc_state.shared_secret, &b_ci_secret, context.master_secret, 16);
-    derive_key(&edhoc_state.shared_secret, &b_ci_salt, context.master_salt, 7);
+    derive_key(&edhoc_state.shared_secret, &b_ci_salt, context.master_salt, 8);
     
     printf("MASTER SECRET: ");
     phex(context.master_secret, 16);
     printf("MASTER SALT: ");
-    phex(context.master_salt, 7);
+    phex(context.master_salt, 8);
 }
 
 static size_t error_buffer(uint8_t* buf, size_t buf_len, char* text) {
@@ -134,12 +134,15 @@ static void authz_info_handler(struct mg_connection* nc, int ev, void* ev_data, 
     free(cose_pop_key.y.buf);
 
     // Send response
-    mg_send_head(nc, 204, 0, "Content-Type: application/octet-stream");
+    mg_send_head(nc, 201, 0, "Content-Type: application/octet-stream");
 }
 
 static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
     int temperature = (int) mgos_dht_get_temp(s_dht);
     int humidity = (int) mgos_dht_get_humidity(s_dht);
+
+    printf("Humidity: %d", humidity);
+    printf("Temperature: %d", temperature);
 
     /// Create Response
     uint8_t response[128];
@@ -157,13 +160,24 @@ static void temperature_handler(struct mg_connection* nc, int ev, void* ev_data,
     size_t len = cbor_encoder_get_buffer_size(&enc, response);
 
     /// Encrypt response
-    cose_encrypt0 enc_response = {.plaintext = (bytes) {response, len}, .external_aad = {NULL, 0}};
+    uint8_t* prot_header;
+    size_t prot_len = hexstring_to_buffer(&prot_header, "a1010c", strlen("a1010c"));
+    bytes b_prot_header = {prot_header, prot_len};
+
+    cose_encrypt0 enc_response = {
+        .plaintext = (bytes) {response, len},
+        .protected_header = b_prot_header,
+        .external_aad = {NULL, 0}
+    };
+
     uint8_t res[256];
     size_t res_len;
-    cose_encode_encrypted(&enc_response, context.master_secret, context.master_salt, res, sizeof(res), &res_len);
+    cose_encode_encrypted(&enc_response, context.master_secret, context.master_salt, 7, res, sizeof(res), &res_len);
 
     mg_send_head(nc, 200, (int64_t) res_len, "Content-Type: application/octet-stream");
     mg_send(nc, res, (int) res_len);
+
+    free(prot_header);
 }
 
 static void set_led_handler(struct mg_connection* nc, int ev, void* ev_data, void *user_data) {
@@ -174,7 +188,7 @@ static void set_led_handler(struct mg_connection* nc, int ev, void* ev_data, voi
     // Decrypt payload
     uint8_t payload[32];
     size_t payload_length = 0;
-    cose_decrypt_enc0(&ciphertext, context.master_secret, context.master_salt, &aad, payload, sizeof(payload), &payload_length);
+    cose_decrypt_enc0(&ciphertext, context.master_secret, context.master_salt, 7, &aad, payload, sizeof(payload), &payload_length);
 
     // Parse payload
     CborParser parser;
@@ -337,7 +351,7 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
 
     uint8_t context_info_iv3[128];
     size_t ci_iv3_len;
-    cose_kdf_context("IV-Generation", 7, &other, context_info_iv3, sizeof(context_info_iv3), &ci_iv3_len);
+    cose_kdf_context("IV-Generation", 13, &other, context_info_iv3, sizeof(context_info_iv3), &ci_iv3_len);
 
     bytes b_ci_k3 = {context_info_k3, ci_k3_len};
     bytes b_ci_iv3 = {context_info_iv3, ci_iv3_len};
@@ -345,7 +359,7 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
     uint8_t k3[16];
     derive_key(&edhoc_state.shared_secret, &b_ci_k3, k3, sizeof(k3));
 
-    uint8_t iv3[7];
+    uint8_t iv3[13];
     derive_key(&edhoc_state.shared_secret, &b_ci_iv3, iv3, sizeof(iv3));
 
     // printf("AAD3: ");
@@ -353,13 +367,13 @@ static void edhoc_handler_message_3(struct mg_connection* nc, int ev, void* ev_d
     printf("K3: ");
     phex(k3, 16);
     printf("IV3: ");
-    phex(iv3, 7);
+    phex(iv3, 13);
 
     bytes b_aad3 = {aad3, SHA256_DIGEST_SIZE};
 
     uint8_t sig_u[256];
     size_t sig_u_len;
-    cose_decrypt_enc0(&msg3.cose_enc_3, k3, iv3, &b_aad3, sig_u, sizeof(sig_u), &sig_u_len);
+    cose_decrypt_enc0(&msg3.cose_enc_3, k3, iv3, 13, &b_aad3, sig_u, sizeof(sig_u), &sig_u_len);
 
     bytes b_sig_u = {sig_u, sig_u_len};
     int verified = cose_verify_sign1(&b_sig_u, edhoc_state.pop_key, &b_aad3);

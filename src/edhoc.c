@@ -78,7 +78,7 @@ size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned
 
     uint8_t context_info_iv2[128];
     size_t ci_iv2_len;
-    cose_kdf_context("IV-Generation", 7, &other, context_info_iv2, sizeof(context_info_iv2), &ci_iv2_len);
+    cose_kdf_context("IV-Generation", 13, &other, context_info_iv2, sizeof(context_info_iv2), &ci_iv2_len);
 
     bytes b_ci_k2 = {context_info_k2, ci_k2_len};
     bytes b_ci_iv2 = {context_info_iv2, ci_iv2_len};
@@ -86,7 +86,7 @@ size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned
     uint8_t k2[16];
     derive_key(&context->shared_secret, &b_ci_k2, k2, sizeof(k2));
 
-    uint8_t iv2[7];
+    uint8_t iv2[13];
     derive_key(&context->shared_secret, &b_ci_iv2, iv2, sizeof(iv2));
 
     //printf("AAD2: ");
@@ -94,13 +94,13 @@ size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned
     printf("K2: ");
     phex(k2, 16);
     printf("IV2: ");
-    phex(iv2, 7);
+    phex(iv2, 13);
 
     // Encrypt
     uint8_t enc_2[256];
     size_t enc_2_len = sizeof(enc_2);
     bytes b_k2 = {k2, 16};
-    bytes b_iv2 = {iv2, 7};
+    bytes b_iv2 = {iv2, 13};
     edhoc_msg2_enc_0(msg2, aad2, &b_sig_v, &b_k2, &b_iv2, enc_2, sizeof(enc_2), &enc_2_len);
 
     // Serialize
@@ -178,12 +178,20 @@ void edhoc_msg2_sig_v(edhoc_msg_2 *msg2, uint8_t* aad2,
 void edhoc_msg2_enc_0(edhoc_msg_2 *msg2, uint8_t *aad2, bytes *sig_v, bytes *key, bytes *iv,
                       uint8_t* out, size_t out_size, size_t* out_len) {
     bytes eaad = {aad2, DIGEST_SIZE};
+
+    uint8_t* prot_header;
+    size_t prot_len = hexstring_to_buffer(&prot_header, "a1010c", strlen("a1010c"));
+    bytes b_prot_header = {prot_header, prot_len};
+
     cose_encrypt0 enc2 = {
+            .protected_header = b_prot_header,
             .external_aad = eaad,
             .plaintext = *sig_v
     };
 
-    cose_encode_encrypted(&enc2, key->buf, iv->buf, out, out_size, out_len);
+    cose_encode_encrypted(&enc2, key->buf, iv->buf, iv->len, out, out_size, out_len);
+
+    free(prot_header);
 }
 
 void edhoc_aad3(edhoc_msg_3* msg3, bytes* message1, bytes* message2,

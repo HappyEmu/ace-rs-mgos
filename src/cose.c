@@ -67,15 +67,14 @@ void cose_sign1_structure(const char* context,
     *out_len = cbor_encoder_get_buffer_size(&enc, out);
 }
 
-void cose_encode_encrypted(cose_encrypt0 *enc0, uint8_t *key, uint8_t *iv, uint8_t *out, size_t out_size, size_t *out_len) {
-    uint8_t* prot_header;
-    size_t prot_len = hexstring_to_buffer(&prot_header, "a1010c", strlen("a1010c"));
-    bytes b_prot_header = {prot_header, prot_len};
-
+void cose_encode_encrypted(cose_encrypt0 *enc0, 
+                           uint8_t *key,
+                           uint8_t *iv, size_t iv_len, 
+                           uint8_t *out, size_t out_size, size_t *out_len) {
     // Compute aad
     uint8_t aad[128];
     size_t aad_len;
-    cose_enc0_structure(&b_prot_header, &enc0->external_aad, aad, sizeof(aad), &aad_len);
+    cose_enc0_structure(&enc0->protected_header, &enc0->external_aad, aad, sizeof(aad), &aad_len);
 
     // Encrypt
     uint8_t ciphertext[enc0->plaintext.len + TAG_SIZE];
@@ -86,7 +85,7 @@ void cose_encode_encrypted(cose_encrypt0 *enc0, uint8_t *key, uint8_t *iv, uint8
 
     mbedtls_ccm_encrypt_and_tag(&ccm, 
                                 enc0->plaintext.len, 
-                                iv, 7, 
+                                iv, iv_len, 
                                 aad, aad_len, 
                                 enc0->plaintext.buf, 
                                 ciphertext, ciphertext+enc0->plaintext.len, TAG_SIZE);
@@ -101,16 +100,13 @@ void cose_encode_encrypted(cose_encrypt0 *enc0, uint8_t *key, uint8_t *iv, uint8
     CborEncoder ary;
     cbor_encoder_create_array(&enc, &ary, 3);
 
-    cbor_encode_byte_string(&ary, b_prot_header.buf, b_prot_header.len);
+    cbor_encode_byte_string(&ary, enc0->protected_header.buf, enc0->protected_header.len);
     cbor_encode_byte_string(&ary, NULL, 0);
     cbor_encode_byte_string(&ary, ciphertext, sizeof(ciphertext));
 
     cbor_encoder_close_container(&enc, &ary);
 
     *out_len = cbor_encoder_get_buffer_size(&enc, out);
-
-    // Cleanup
-    free(prot_header);
 }
 
 void cose_enc0_structure(bytes* body_protected, bytes* external_aad,
@@ -175,7 +171,7 @@ void derive_key(bytes *input_key, bytes *info, uint8_t* out, size_t out_size) {
     // wc_HKDF(SHA256, input_key.buf, (word32) input_key.len, NULL, 0, info.buf, (word32) info.len, out, (word32) out_size);
 }
 
-void cose_decrypt_enc0(bytes* enc0, uint8_t *key, uint8_t *iv, bytes* external_aad,
+void cose_decrypt_enc0(bytes* enc0, uint8_t *key, uint8_t *iv, size_t iv_len, bytes* external_aad,
                        uint8_t* out, size_t out_size, size_t *out_len) {
     // Parse encoded enc0
     CborParser parser;
@@ -214,7 +210,7 @@ void cose_decrypt_enc0(bytes* enc0, uint8_t *key, uint8_t *iv, bytes* external_a
     mbedtls_ccm_init(&ccm);
     mbedtls_ccm_setkey(&ccm, MBEDTLS_CIPHER_ID_AES, key, 128);
 
-    mbedtls_ccm_auth_decrypt(&ccm, sizeof(plaintext), iv, 7, aad, aad_len, ciphertext.buf, plaintext, auth_tag, TAG_SIZE);
+    mbedtls_ccm_auth_decrypt(&ccm, sizeof(plaintext), iv, 13, aad, aad_len, ciphertext.buf, plaintext, auth_tag, TAG_SIZE);
 
     mbedtls_ccm_free(&ccm);
     phex(plaintext, sizeof(plaintext));
