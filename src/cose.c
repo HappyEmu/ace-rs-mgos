@@ -213,7 +213,7 @@ void cose_decrypt_enc0(bytes* enc0, uint8_t *key, uint8_t *iv, size_t iv_len, by
     mbedtls_ccm_auth_decrypt(&ccm, sizeof(plaintext), iv, 13, aad, aad_len, ciphertext.buf, plaintext, auth_tag, TAG_SIZE);
 
     mbedtls_ccm_free(&ccm);
-    phex(plaintext, sizeof(plaintext));
+    //phex(plaintext, sizeof(plaintext));
 
     // Return plaintext to caller
     memcpy(out, plaintext, sizeof(plaintext));

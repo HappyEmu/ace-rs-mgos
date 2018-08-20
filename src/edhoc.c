@@ -60,10 +60,12 @@ size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned
     uint8_t aad2[DIGEST_SIZE];
     edhoc_aad2(msg2, context->message1, aad2);
 
+    printf("Computing EDHOC MSG2 Signature...\n");
     // Compute Signature
     uint8_t sig_v[256];
     size_t sig_v_len = sizeof(sig_v);
     edhoc_msg2_sig_v(msg2, aad2, sig_v, sizeof(sig_v), &sig_v_len);
+    printf("Done\n");
 
     bytes b_sig_v = {sig_v, sig_v_len};
     //printf("sig_v: ");
@@ -91,17 +93,19 @@ size_t edhoc_serialize_msg_2(edhoc_msg_2 *msg2, msg_2_context* context, unsigned
 
     //printf("AAD2: ");
     //phex(aad2, DIGEST_SIZE);
-    printf("K2: ");
-    phex(k2, 16);
-    printf("IV2: ");
-    phex(iv2, 13);
+    //printf("K2: ");
+    //phex(k2, 16);
+    //printf("IV2: ");
+    //phex(iv2, 13);
 
     // Encrypt
     uint8_t enc_2[256];
     size_t enc_2_len = sizeof(enc_2);
     bytes b_k2 = {k2, 16};
     bytes b_iv2 = {iv2, 13};
+    printf("Encrypting EDHOC MSG 2...\n");
     edhoc_msg2_enc_0(msg2, aad2, &b_sig_v, &b_k2, &b_iv2, enc_2, sizeof(enc_2), &enc_2_len);
+    printf("Done\n");
 
     // Serialize
     CborEncoder enc;
